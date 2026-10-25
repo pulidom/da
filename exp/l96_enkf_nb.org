@@ -1,0 +1,169 @@
+#+TITLE: Notebook for assimilating L96 with EnKF
+# -------------------------------------------------------------
+#+SETUPFILE: ~/org/python_conf.org
+
+** Cargo librerias 
+
+#+BEGIN_SRC shell :session :results output raw
+import numpy as np
+import numpy.linalg as la 
+
+#+END_SRC
+
+
+#+BEGIN_SRC python 
+class OBS:
+    """Linear observations: y = H x + noise, where H selects the components obs_indices of x."""
+
+    def __init__(self, R, nx, obs_indices, seed=22):
+        
+        self.rng = np.random.default_rng(seed)
+        self.randn = self.rng.standard_normal
+
+        self.nx = nx
+        self.obs_indices = np.atleast_1d(obs_indices)
+        self.ny = len(self.obs_indices)
+
+        self.H = np.eye(nx)[self.obs_indices]       # (ny, nx) selection matrix
+        self.R = np.atleast_2d(R)
+        assert self.R.shape == (self.ny, self.ny), "R must be (ny, ny)"
+        assert len(np.unique(self.obs_indices)) == self.ny, "obs_indices must be unique"
+        self.Rinv = la.inv(self.R)
+        self.sqR = la.cholesky(self.R)       # R = sqR @ sqR.T
+
+    def Hop(self, x):
+        return self.H @ x
+
+    def generate_obs(self, x0_true, ncy, Tmdl):
+        x = np.copy(x0_true)
+        xt_t = np.empty((ncy, self.nx))
+        y_t = np.empty((ncy, self.ny))
+        for it in range(ncy):
+            xt_t[it] = x
+            y_t[it] = self.H @ x + self.sqR @ self.randn(self.ny)
+            x = Tmdl.integ(x)
+        return xt_t, y_t    
+#+END_SRC
+
+#+BEGIN_SRC python 
+class FILTER:
+    
+    #- 1 -------------------------------------------------    
+    def __init__(self, Fmdl,Obs,
+                 assmtd='perobs',
+                 finf = 1.0,
+                 seed = 22,
+                 ):
+        
+        self.assmtd = getattr(self, assmtd)    
+        self.Hop    = Obs.Hop
+        self.Obs    = Obs
+        self.R, self.sqR = Obs.R, Obs.sqR
+        self.Rinv   = Obs.Rinv      # etkf
+        
+        self.rng = np.random.default_rng(seed)
+        self.randn = self.rng.standard_normal
+        
+        self.integ  = Fmdl.integ
+        
+        self.finf =finf
+        
+        
+    #- 2 -------------------------------------------------
+    def asscy(self,X0,y_t):
+        """
+            assimilation cyle.
+            Observations are expected at it=1 (xa is at it=0)
+        """
+
+        [Nx, Nem] = X0.shape; [Ncy,Ny] = y_t.shape
+
+        # variable initializations
+        Xa_t,Xf_t=np.zeros((2,Ncy,Nx,Nem))
+
+        Xa_t[0], Xf_t[0] = X0, X0 # a priori state at icy=0
+
+        Xa=np.copy(X0)
+        
+        # next assimilation cycles
+        for icy in range(1,Ncy,1):
+
+            # Evolve forecast ensemble members
+            Xf = self.integ(Xa)
+            Xf_t[icy]=Xf # without inflation
+            
+            if np.isfinite(y_t[icy]).all(): # NaN observations do not exist    
+               Xf = self.inflate(Xf)
+               Xa = self.assmtd(Xf, y_t[icy])
+            else: # if no obs, forecasts
+                Xa=Xf
+            
+            Xa_t[icy]=Xa
+            
+        return Xa_t,Xf_t
+    __call__=asscy
+
+    #- 2 -------------------------------------------------
+    def inflate(self, Xf):
+        if self.finf > 1.0:
+            xm = Xf.mean(1, keepdims=True)
+            Xf = xm + self.finf * (Xf - xm)
+        return Xf
+
+    #- 2 -------------------------------------------------
+    def perobs(self,Xf,y):
+        """ Observaciones perturbadas  EnKF
+             Evita calculo de la covarianza
+             Usa diferencias del operador observacional 
+                (suitable para nonlinear map)
+             Xf [Nx,Nem],y [Ny]
+             implicit: H, sqR, R
+             \[ X^a = X^f + X'  [ \mathcal{H}'(x) ]
+                 [ \mathcal{H}'(x)^\tau \mathcal{H}'(x) + R ]^{-1} 
+                 ( y- \mathcal{H}(x) ) \]
+        """
+        
+        Nem=Xf.shape[1]; Ny=y.shape[0]
+        Hx = self.Hop(Xf) # # Observational map Ny,Nem
+        
+        xfm,Xper = meanper(Xf)        
+        hxm,Yper = meanper(Hx)
+
+        D = Yper @ Yper.T + self.R * (Nem-1)
+
+        M = np.linalg.solve(D, Yper).T
+        Noise = self.sqR @ self.randn( (Ny, Nem) )
+        Xa = Xf + K @ (y[...,np.newaxis] - Hx + Noise)
+
+        innov = y[:, None] - Hx + self.sqR @ self.randn((Ny, Nem))   # (Ny, Nem)
+        
+        if Nem > 2 * Ny:                                     # large ensemble
+            K = Xper @ M                                     # (Nx, Ny)
+            return Xf + K @ innov
+        else:                                                # small ensemble
+            return Xf + Xper @ (M @ innov)
+
+    #- 3 -------------------------------------------------
+    def etkf(self,Xf,yo):
+        " Assimilate using Hunt et al, etkf, square root  enkf"
+        
+        Nem = Xf.shape[1]
+        Rinv= self.Rinv
+        
+        Yf = self.Hop(Xf) # Observational map
+
+        # mean and perturbations
+        xfm,Xper = meanper(Xf)        
+        hxfm,Yper =meanper(Yf)
+
+        C = Yper.T @ Rinv
+        B = (Nem-1.)*np.eye(Nem)+ C @ Yper
+
+        Pa , Wa = PaWa ( B ) # inverse and square root via EIG
+
+        innov = yo[...,np.newaxis] - hxfm
+        wa = Pa @ (C @ innov)
+
+        Xa = xfm + Xper @ (wa+Wa)
+        return Xa
+#+END_SRC
