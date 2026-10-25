@@ -35,6 +35,7 @@ class M: # parent dynamical model class
                  dt    = None, # integration time step
 #                 num_scheme = rk4, # numerical integration scheme
                  expdir = None, # experiment dir set to save the initial conditions
+                 Nem = 30,
                  ):
         self.dtcy=dtcy        
         self.kt= int(dtcy/dt) # number of model time steps between observations
@@ -42,6 +43,7 @@ class M: # parent dynamical model class
         self.dt=dtcy/self.kt # exact integration time step
         self.__num_scheme= self.rk4 #num_scheme
         self.expdir = expdir
+        self.Nem = Nem
         
     def __call__(self,x):
         return self.integ(x)
@@ -53,20 +55,20 @@ class M: # parent dynamical model class
             x = mdl( x )            
         return x
 
-    def set_ntobs(self, ntobs = 1): # number of observations within the cycle
-        self.jtobs=np.linspace(0, self.kt - 1, ntobs+1, dtype=int)
-        self.ntobs=ntobs
+    def set_ntobs(self, Ntobs = 1): # number of observations within the cycle
+        self.jtobs=np.linspace(0, self.kt - 1, Ntobs+1, dtype=int)
+        self.Ntobs=Ntobs
         
     def integ2obs(self,x): 
         ''' Integrate state in a given set of times for 4Dvar '''
         
         mdl = self.__num_scheme
         jt  = self.jtobs
-        ntobs = len(jt)-1
-        Xobs = np.empty((ntobs, *x.shape))
+        Ntobs = len(jt)-1
+        Xobs = np.empty((Ntobs, *x.shape))
         x_traj = np.empty((jt[-1] + 1, *x.shape)) #full time step trajectory 
         x_traj[0] = x
-        for ij in range(1,ntobs+1):
+        for ij in range(1,Ntobs+1):
             for it in range(jt[ij-1],jt[ij]):
                 x = mdl( x )
                 x_traj[it + 1] = x
@@ -89,8 +91,8 @@ class M: # parent dynamical model class
     def euler(self,x):
         return x + self._mdl( x )
 
-    def gen_ICs(self, nt_spinup=7200, nt_corr=30, seed=25, nem=100,
-                x0=0, x0std=1, lens=1, nt_samples=1000):
+    def gen_ICs(self, Nt_spinup=7200, Nt_corr=30, seed=25, 
+                x0=0, x0std=1, lens=1, Nt_samples=1000):
         """Spinup, climatology, and random selection of xt0 and X0."""
 
         
@@ -98,43 +100,43 @@ class M: # parent dynamical model class
         rng = np.random.default_rng(seed)
 
         # Spinup from a random initial condition
-        x = x0 + x0std * rng.normal(0, 1, self.nx)
+        x = x0 + x0std * rng.normal(0, 1, self.Nx)
         kt_orig = self.kt
         
-        self.kt = kt_orig * nt_spinup
+        self.kt = kt_orig * Nt_spinup
         x = self.integ(x)
         
-        # Climatology: samples separated by nt_corr steps (uncorrelated)
-        self.kt = kt_orig * nt_corr
+        # Climatology: samples separated by Nt_corr steps (uncorrelated)
+        self.kt = kt_orig * Nt_corr
         print('Climatology')
-        x_t = np.empty((nt_samples, self.nx))
+        x_t = np.empty((Nt_samples, self.Nx))
         x_t[0] = x
-        for it in range(1, nt_samples):
+        for it in range(1, Nt_samples):
             x_t[it] = self.integ(x_t[it - 1])
             
         self.kt = kt_orig  
 
         rng = np.random.default_rng(seed + 1)
-        self.nem = nem
+        nem = self.nem
 
         if lens == 1:
             print('Take initial condition from climatology')
-            idx = rng.choice(nt_samples, nem + 1, replace=True)
+            idx = rng.choice(Nt_samples, nem + 1, replace=True)
             X0 = x_t[idx[:nem]].T
             xt0 = x_t[idx[nem]]
         elif lens == 0:
             print('Take initial ensemble randomly around true state')
-            xt0 = x_t[rng.integers(nt_samples)]
+            xt0 = x_t[rng.integers(Nt_samples)]
             Pf0 = np.cov(x_t.T)                    # climatological covariance
             self.sqPf0 = 0.1 * np.linalg.cholesky(Pf0)
-            X0 = xt0[:, None] + self.sqPf0 @ rng.normal(0, 1, (self.nx, nem))
+            X0 = xt0[:, None] + self.sqPf0 @ rng.normal(0, 1, (self.Nx, nem))
 
         return xt0, X0
     
 
-    def initialization(self, nt_spinup=7200, nt_corr=30, seed=25, nem=100,
-                       x0=0, x0std=1, lens=1, nt_samples=1000):
-        """Initial true state xt0 (nx,) and ensemble X0 (nx, nem), from cache if available."""
+    def initialization(self, Nt_spinup=7200, Nt_corr=30, seed=25, 
+                       x0=0, x0std=1, lens=1, Nt_samples=1000):
+        """Initial true state xt0 (Nx,) and ensemble X0 (Nx, nem), from cache if available."""
         fname = None if self.expdir is None else os.path.join(self.expdir, 'ini_cond.npz')
 
         if fname and os.path.isfile(fname):
@@ -142,8 +144,8 @@ class M: # parent dynamical model class
             data = np.load(fname)
             return data['xt0'], data['X0']
 
-        xt0, X0 = self.gen_ICs(nt_spinup, nt_corr, seed, nem,
-                               x0, x0std, lens, nt_samples)
+        xt0, X0 = self.gen_ICs(Nt_spinup, Nt_corr, seed, 
+                               x0, x0std, lens, Nt_samples)
         if fname:
             np.savez(fname, X0=X0, xt0=xt0)
         return xt0, X0
@@ -162,7 +164,7 @@ class L63(M):
         self.sigma = sigma
         self.rho = rho
         self.beta = beta
-        self.nx = 3 # state dimension
+        self.Nx = 3 # state dimension
         
         
     def _mdl(self,x):
@@ -183,22 +185,22 @@ class L96(M):
     Uses list of indices to speed up calculations
     Works with ensembles (second dimension) 
     '''
-    def __init__( self, dt=0.005, dtcy = 0.05, F=8., nx=40, **kwargs):
+    def __init__( self, dt=0.005, dtcy = 0.05, F=8., Nx=40, **kwargs):
         super().__init__(  dt=dt, dtcy = dtcy, **kwargs)
 
         self.dt=dt
-        self.nx=nx
+        self.Nx=Nx
         self.F = F 
         
         #indices for model scheme
-        k = np.arange(nx)
-        self.indm2 = (k - 2) % nx
-        self.indm1 = (k - 1) % nx
-        self.indp1 = (k + 1) % nx
+        k = np.arange(Nx)
+        self.indm2 = (k - 2) % Nx
+        self.indm1 = (k - 1) % Nx
+        self.indp1 = (k + 1) % Nx
 
 
     def _mdl(self,x):
-        " L96 model equations Requires nx as first dim x[nx,npa/nem]"
+        " L96 model equations Requires Nx as first dim x[Nx,npa/nem]"
         dx = (x[self.indp1] - x[self.indm2]) * x[self.indm1] - x + self.F
         return dx * self.dt
 
@@ -208,47 +210,47 @@ class L96_2scl(M):
     '''
     Two scale L96
     Uso los parametros de paper original pero con 40 variables en lugar de 36:
-    F=10,nx=40, ny = 400, c=10, b=10, h=1, # L96 two scale
+    F=10,Nx=40, Ny = 400, c=10, b=10, h=1, # L96 two scale
     dtcy=0.05,dt=0.005,   # integration parameters
 
-    x = [ nx,] nem ]
+    x = [ Nx,] nem ]
     '''
-    def __init__(self, F=10,nx=40, #model parameters
-                 ny = 400, c=10, b=10, h=1, # L96 two scale
+    def __init__(self, F=10,Nx=40, #model parameters
+                 Ny = 400, c=10, b=10, h=1, # L96 two scale
                  dtcy=0.05,dt=0.005, #integration parameters
                  **kwargs):
         super().__init__(dt=dt, dtcy=dtcy, **kwargs)
 
-        self.nx = nx + ny # total number of variables for the state
+        self.Nx = Nx + Ny # total number of variables for the state
         
-        self.nxls = nx
-        self.ny = ny
-        self.nj  = ny//nx
+        self.Nxls = Nx
+        self.Ny = Ny
+        self.nj  = Ny//Nx
         self.Fext = F
         self.c = c             # c,b,h small-scale parameters
         self.a = c*b           # 
         self.hint = h*c/b
         
         #indices for model scheme
-        k = np.arange(nx)
-        self.indm2 = (k - 2) % nx
-        self.indm1 = (k - 1) % nx
-        self.indp1 = (k + 1) % nx
+        k = np.arange(Nx)
+        self.indm2 = (k - 2) % Nx
+        self.indm1 = (k - 1) % Nx
+        self.indp1 = (k + 1) % Nx
             
-        j = np.arange(ny)
-        self.indm1y = (j - 1) % ny
-        self.indp1y = (j + 1) % ny
-        self.indp2y = (j + 2) % ny
+        j = np.arange(Ny)
+        self.indm1y = (j - 1) % Ny
+        self.indp1y = (j + 1) % Ny
+        self.indp2y = (j + 2) % Ny
         self.indx2y = j // self.nj
         
 
     def _mdl(self,x):
         " Two scale L96 model equations"
 
-        xls = x[:self.nxls,...]
-        xss = x[self.nxls:,...]
+        xls = x[:self.Nxls,...]
+        xss = x[self.Nxls:,...]
 
-        sumxss = xss.reshape(self.nxls,self.nj,*xss.shape[1:]).sum(axis=1)
+        sumxss = xss.reshape(self.Nxls,self.nj,*xss.shape[1:]).sum(axis=1)
         
         self.F = self.Fext - self.hint  *  sumxss        
         dxls = self._mdl_ls(xls)
@@ -271,10 +273,10 @@ class L96_2scl(M):
 
     def diagnostic_forcing(self, x):
         ' Compute the small-scale forcing   for parameterization '
-        xss = x[..., self.nxls:]
+        xss = x[..., self.Nxls:]
 
         sumxss = xss.reshape(*xss.shape[:-1],
-            self.nxls,self.nj,).sum(axis=-1)
+            self.Nxls,self.nj,).sum(axis=-1)
 
         return  - self.hint * sumxss
     
@@ -283,7 +285,7 @@ class L96_2scl(M):
         Linear regression of effective forcing against
         F = intercept + slope * X
         """
-        xls = x[..., :self.nxls]
+        xls = x[..., :self.Nxls]
         F = self.diagnostic_forcing(x)
         
         return -np.polyfit(xls.ravel(), F.ravel(),1)
@@ -293,8 +295,8 @@ class L96lforcing(M):
     '''  
     Add a linear forcing to the L96 to mimic the two-scale L96
     '''
-    def __init__(self, F=10,nx=40, #model parameters
-                 ny = 400, c=10, b=10, h=1, # L96 two scale
+    def __init__(self, F=10,Nx=40, #model parameters
+                 Ny = 400, c=10, b=10, h=1, # L96 two scale
                  dtcy=0.05,dt=0.005, #integration parameters
                  **kwargs):        
         super().__init__(dt=dt,dtcy=dtcy, **kwargs ) #dtcy=dtcy,dt=dt)
@@ -303,33 +305,33 @@ class L96lforcing(M):
             a0 = 0.165
             a1 = 0.320
         else:
-            nt=100000
-            l96_2scl = L96_2scl(F=F,nx=nx,dtcy=dtcy,dt=dt,
-                                ny=ny,c=c,b=b,h=h)
+            Nt=100000
+            l96_2scl = L96_2scl(F=F,Nx=Nx,dtcy=dtcy,dt=dt,
+                                Ny=Ny,c=c,b=b,h=h)
             x0,_ = l96_2scl.initialization()
 
-            x_t=np.zeros([nt,x0.shape[0]])
+            x_t=np.zeros([Nt,x0.shape[0]])
             x_t[0]=x0
-            for it in range(1,nt):
+            for it in range(1,Nt):
                 x_t[it]=l96_2scl(x_t[it-1])
 
             a1,a0 =  l96_2scl.forcing_regression(x_t)
         
         self.dt=dt
-        self.nx=nx
+        self.Nx=Nx
         self.F = F 
         
         #indices for model scheme
-        k = np.arange(nx)
-        self.indm2 = (k - 2) % nx
-        self.indm1 = (k - 1) % nx
-        self.indp1 = (k + 1) % nx
+        k = np.arange(Nx)
+        self.indm2 = (k - 2) % Nx
+        self.indm1 = (k - 1) % Nx
+        self.indp1 = (k + 1) % Nx
 
         self.Ft = self.F - a0
         self.lin = -1.0 - a1
         
     def _mdl(self,x):
-        " L96 model equations with forcing x[nx,npa/nem]"
+        " L96 model equations with forcing x[Nx,npa/nem]"
         dx = (x[self.indp1] - x[self.indm2]) * x[self.indm1] + self.lin * x + self.Ft 
         return dx * self.dt
 #    def _mdl(self,x):
@@ -338,8 +340,8 @@ class L96lforcing(M):
 #        return dx
 #    
 def plot_hovmoller(x, dtcy, title="Lorenz-96"):
-    nt, nx = x.shape
-    time = np.arange(nt) * dtcy
+    Nt, Nx = x.shape
+    time = np.arange(Nt) * dtcy
 
     fig, ax = plt.subplots(figsize=(10, 5))
 
@@ -347,7 +349,7 @@ def plot_hovmoller(x, dtcy, title="Lorenz-96"):
         x.T,
         aspect="auto",
         origin="lower",
-        extent=[time[0], time[-1], 0, nx],
+        extent=[time[0], time[-1], 0, Nx],
     )
 
     ax.set_xlabel("Time")

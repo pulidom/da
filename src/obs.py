@@ -1,22 +1,32 @@
 import numpy as np
-from utils import DH, H_linear
+from utils import DH, H_linear, obs_points
 
 class OBS:
     """ Observations y = Hmap(x[obs_indices]) + noise, with Hmap acting elementwise.
         Hmap = H_linear, H_log, H_tanh, H_quartic, H_log_quadratic 
+
     """
 
-    def __init__(self, R,  obs_indices, Hmap=H_linear, seed=22):
+    def __init__(self, R=None, obs_indices=None, Tmdl=None,
+                 Nx=None, Ny=None, Ncy = 100,
+                 dat_fname = None,
+                 obs_type='uniform', Hmap=H_linear, seed=22):
         
         self.rng = np.random.default_rng(seed)
         self.randn = self.rng.standard_normal
 
+        if obs_indices is None:
+            obs_indices = obs_points(Nx, Ny, mode=obs_type, rng=self.rng)
+            
         self.obs_indices = np.atleast_1d(obs_indices)
         self.Ny = len(self.obs_indices)
+        self.Ncy = Ncy
 
+        self.Tmdl = Tmdl
         self.Hmap, self.dHmap = Hmap, DH[Hmap]
         self.obs_shape = (self.Ny,)
 
+        self.dat_fname = None
         self.R = np.atleast_2d(R)
         self.Rinv = np.linalg.inv(self.R)
         self.sqR = np.linalg.cholesky(self.R)        # R = sqR @ sqR.T
@@ -34,9 +44,10 @@ class OBS:
         """H'(x), shape (Ny, Nx), built row by row from the adjoint."""
         return np.array([self.Htop(x, e) for e in np.eye(self.Ny)])
 
-    def generate_obs(self, x0_true, Ncy, Tmdl):
+    def generate_obs(self, x0_true):
         """xt_t: (Ncy, Nx); y_t: (Ncy, *obs_shape)"""
         x1 = np.copy(x0_true)
+        Ncy = self.Ncy
         y_t = np.empty((Ncy, *self.obs_shape))
         xt_t = np.empty((Ncy, x0_true.shape[0]))
 
@@ -44,26 +55,26 @@ class OBS:
             yf = self.Hop(x1)
             y_t[it] = yf + self.randn(yf.shape) @ self.sqR.T   # works for (Ny,) and (Ntobs, Ny)
             xt_t[it] = x1
-            x1 = Tmdl.integ(x1)
+            x1 = self.Tmdl.integ(x1)
 
         return xt_t, y_t
     
-    def generate_trueobs(self, xt0, ncy, Tmdl, dat_fname=None):
+    def generate_trueobs(self, xt0):
         
-        if dat_fname and os.path.isfile(dat_fname):
-            data = np.load(dat_fname)
+        if self.dat_fname and os.path.isfile(self.dat_fname):
+            data = np.load(self.dat_fname)
             yo_t, xt_t = data["y"], data["xt"]
             
-            if (yo_t.shape[0] >= ncy and yo_t.shape[1:] == self.obs_shape
-                    and xt_t.shape[1] == Tmdl.nx):
-                print("Load true and obs from", dat_fname)
-                return xt_t[:ncy], yo_t[:ncy]
+            if (yo_t.shape[0] >= self.Ncy and yo_t.shape[1:] == self.obs_shape
+                    and xt_t.shape[1] == self.Tmdl.nx):
+                print("Load true and obs from", self.dat_fname)
+                return xt_t[:self.Ncy], yo_t[:self.Ncy]
 
         print("Generate true and obs")
-        xt_t, yo_t = self.generate_obs(xt0, ncy, Tmdl)
+        xt_t, yo_t = self.generate_obs(xt0)
         
-        if dat_fname:
-            np.savez(dat_fname, y=yo_t, xt=xt_t)
+        if self.dat_fname:
+            np.savez(self.dat_fname, y=yo_t, xt=xt_t)
             
         return xt_t, yo_t
         
@@ -78,7 +89,7 @@ class OBS4D(OBS):
         
         self.Ntobs = Ntobs
         Mdl.set_ntobs(ntobs=Ntobs)
-        self.Mdl = Mdl
+        self.Mdl = Mdl #ojo este es el modelo surrogado y el otro es el true
         self.obs_shape = (Ntobs, self.Ny)
 
     def Hop(self, x0):

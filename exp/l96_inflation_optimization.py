@@ -7,16 +7,16 @@ from enkf import FILTER
 from brute_force import robust_zoom
 
 Nx = 40
-Ny = 40
-Mdl= mdl(nx=Nx,expdir='../dat/l96_40v/')
+Ny = 20
+Mdl= mdl(Nx=Nx,expdir='../dat/l96_40v/',Nem=30)
 
-xt0,X0 = Mdl.initialization(nem=30)
+xt0,X0 = Mdl.initialization()
 
 
 #H=np.eye(Nx)
 indobs = utils.obs_points(Nx, Ny)
-Obs    = obs.OBS(0.5*np.eye(Ny),indobs)
-xt_t,y_t= Obs(xt0,1200,Mdl)
+Obs    = obs.OBS(0.5*np.eye(Ny),indobs,Tmdl=Mdl,Ncy=1200)
+xt_t,y_t= Obs(xt0)
 ispin = 200
 # Reference values perfect model R=0.5
 ## Ny=20 ETKF finf=1.0125 RMSE:  0.1896904916746387
@@ -28,7 +28,7 @@ ispin = 200
 def make_objective(seed=4, assmtd='etkf'):
     def f(finf):
         errs = []
-        filt = FILTER(Mdl, Obs, assmtd=assmtd, finf=finf, seed=s)
+        filt = FILTER(Mdl, Obs, assmtd=assmtd, finf=finf, seed=seed)
         try:
             Xa_t, _ = filt(X0, y_t)
         except np.linalg.LinAlgError:
