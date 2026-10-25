@@ -1,0 +1,66 @@
+* Data assimilation
+#+OPTIONS: ^:{}
+
+This repository contains simple scripts of the following data assimilation methods:
+
+- perturbed observations  EnKF (Burger et al 1996)
+- ensemble transformed Kalman filter (ETKF, Hunt et al 2009),
+- 3DVar variational DA.
+- 4DVar
+
+They are mainly with illustrative and pedagogical purposes.
+
+** Main classes
+
+*** Dynamical systems
+They are all in the ~src/dyn.py~ file.
+
+You will find classes for:
+
+- Lorenz 1963: L63 class
+- Lorenz 1996: L96
+- Lorenz 1996 two scales: L96_2scl
+- Lorenz 1996 with a linear parameterization (to mimic the 2 scales): L96lforcing
+
+- Parent class: M
+  - Define integration methods: RK4 and Euler
+  - Initialize the true initial condition and the ensemble members (considering a spinup time)
+*** Observation class
+
+In the file ~src/obs.py~
+
+- Define observational operator and observation covariance
+- Generate synthetic observations
+
+*** Filter class
+
+It is located at the file ~src/enkf.py~
+
+*** Variational DA classes
+
+It is located at the file ~src/var.py~
+
+- VAR3D
+- VAR4D
+- simple NMC method to generate background covariance in dynamical systems 
+  
+** Examples
+
+*** Example to run an experiment from a script
+
+In folder exp
+```python l96_simple_assm.py
+```
+
+*** Example with notebooks
+
+In the directory nb you will find orgmode and jupyter notebooks to illustrate the flow of the scripts.
+
+
+
+** Reference
+
+Pulido M., G. Scheffler, J. Ruiz, M. Lucini and P. Tandeo, 2016: Estimation of the functional form of subgrid-scale schemes using ensemble-based data assimilation: a simple model experiment. Q. J.  Roy. Meteorol. Soc.,  142, 2974-2984.
+
+http://doi.org/10.1002/qj.2879
+
