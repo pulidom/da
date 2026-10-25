@@ -19,10 +19,14 @@ Obs    = obs.OBS(0.5*np.eye(Ny),indobs,Tmdl=Mdl,Ncy=1200)
 xt_t,y_t= Obs(xt0)
 ispin = 200
 # Reference values perfect model R=0.5
+# Nem = 30
 ## Ny=20 ETKF finf=1.0125 RMSE:  0.1896904916746387
 ## Ny=20 perobs2 1.083 RMSE:  0.2757086485893622
 ## Ny=40 perobs2 1.05 RMSE:  0.15822656105698532
 ## Ny=40 ETKF 1.00416 RMSE:  0.12350096239685815
+
+# Nem = 100  Ny=40 perobs2  p=1.015    0.1306
+#            etkf    p=1.009    f=0.1304
 
 
 def make_objective(seed=4, assmtd='etkf'):

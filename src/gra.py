@@ -75,18 +75,37 @@ def assm(variables, xa, *, filename=None, title='', ylabel=None, ylim=None,
     axs[0, min(legend_panel, nv - 1)].legend(loc='best')
 
     if filename is not None:
-        save_and_show(fig, filename)
-    plt.close(fig)
+    #    save_and_show(fig, filename)
+        plt.savefig(filename)
+    #plt.close(fig)
+
+
+#--------------------------------------------------
+def plot_truth_obs(xt, y, indobs, dtcy, variables=(0, 1), title='', filename=None, xlim=None):
+    """Truth (dashed) and observations (dots). xt: (ncy, nx); y: (ncy, ny);
+    indobs: state indices of the observed variables; dtcy: time between cycles."""
+    tspan = np.arange(xt.shape[0]) * dtcy
+    fig, axs = plt.subplots(1, len(variables), figsize=(10, 3),
+                            squeeze=False, constrained_layout=True)
+    fig.suptitle(title)
+
+    for k, (ax, jx) in enumerate(zip(axs[0], variables)):
+        ax.plot(tspan, xt[:, jx], label='True')
+        if jx in indobs:
+            ax.plot(tspan, y[:, list(indobs).index(jx)], '.', label='Obs')
+        if xlim:
+            ax.set_xlim(xlim)
+        ax.set_xlabel('Time')
+        ax.set_ylabel(f'x[{jx}]')
+        ax.text(0.92, 1.03, f'({string.ascii_lowercase[k]})', transform=ax.transAxes)
+
+    axs[0, -1].legend()
+    if filename: plt.savefig(filename)
+    #plt.close(fig)
+
     
 #--------------------------------------------------
-def ylabelp(ylabel0,string):
-    if ylabel0 is None: ylabel0=string
-    return ylabel0
-
-labelPanel=['(a)','(b)','(c)','(d)','(e)','(f)']    
-
-
-def plot_hovmoller(x, dtcy, title="Lorenz-96"):
+def plot_hovmoller(x, dtcy, title="Lorenz-96",filename='../tmp/hovmoller.png'):
     nt, nx = x.shape
     time = np.arange(nt) * dtcy
 
@@ -106,4 +125,4 @@ def plot_hovmoller(x, dtcy, title="Lorenz-96"):
     fig.colorbar(im, ax=ax, label="X")
 
     plt.tight_layout()
-    plt.savefig(f'../tmp/{title}_hovmoller.png')
+    plt.savefig(filename)

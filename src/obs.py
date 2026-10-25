@@ -26,7 +26,10 @@ class OBS:
         self.Hmap, self.dHmap = Hmap, DH[Hmap]
         self.obs_shape = (self.Ny,)
 
-        self.dat_fname = None
+        self.dat_fname = dat_fname
+        R = np.asarray(R, dtype=float)
+        if R.ndim == 0:                      # number -> R * I
+            R = R * np.eye(self.Ny)
         self.R = np.atleast_2d(R)
         self.Rinv = np.linalg.inv(self.R)
         self.sqR = np.linalg.cholesky(self.R)        # R = sqR @ sqR.T

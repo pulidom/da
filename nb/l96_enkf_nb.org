@@ -4,46 +4,117 @@
 
 ** Cargo librerias 
 
-#+BEGIN_SRC shell :session :results output raw
+#+BEGIN_SRC python 
+import sys;  sys.path.insert(0, '../src/')
+import org_savefig ## cambio el savefig standard para que imprima formato de link
 import numpy as np
 import numpy.linalg as la 
+import dyn
+import utils
+import gra
+#+END_SRC
+
+#+RESULTS:
+:results:
+:end:
+
+** Defino la configuracion general
+
+#+BEGIN_SRC python 
+Ncy    = 1200
+expdir = '../dat/l96_40v/001/' #L96_40v/'
+
+dtcy = 0.05
+Rfac = 0.5
+Nem  = 100
+Ny = 20
+m_kwargs = { 'dtcy':dtcy,'expdir':expdir,'Nem':Nem }
+o_kwargs = {'R':Rfac,'Nx':40,'Ny':Ny,
+            'dat_fname':expdir+'trueobs',
+            'obs_type':'uniform','Ncy':Ncy}
+a_kwargs = { 'assmtd':'etkf','finf':1.015}
 
 #+END_SRC
 
+#+RESULTS:
+:results:
+:end:
+
+** Modelo verdadero
+Genero un estado inicial de la verdad xt0, y perturbaciones del ensamble inicial (desconociendo la verdad), X0.
+
+#+BEGIN_SRC python 
+Mdl    = dyn.L96(**m_kwargs)
+xt0,X0 = Mdl.initialization()
+
+#+END_SRC
+
+#+RESULTS:
+:results:
+Generating initial conditions
+Climatology
+Take initial condition from climatology
+:end:
+
+
+** Observaciones
+Libreria para definir el operador observacional, los errores observacionales y las observaciones sinteticas
 
 #+BEGIN_SRC python 
 class OBS:
     """Linear observations: y = H x + noise, where H selects the components obs_indices of x."""
 
-    def __init__(self, R, nx, obs_indices, seed=22):
+    def __init__(self, R=None, obs_indices=None, 
+                 Nx=None, Ny=None, Ncy = 100,
+                 dat_fname = None,
+                 obs_type='uniform', seed=22):
         
         self.rng = np.random.default_rng(seed)
         self.randn = self.rng.standard_normal
 
-        self.nx = nx
+        if obs_indices is None:
+            obs_indices = utils.obs_points(Nx, Ny, mode=obs_type, rng=self.rng)
+            
         self.obs_indices = np.atleast_1d(obs_indices)
-        self.ny = len(self.obs_indices)
+        self.Ny = len(self.obs_indices)
+        self.Ncy = Ncy
 
-        self.H = np.eye(nx)[self.obs_indices]       # (ny, nx) selection matrix
-        self.R = np.atleast_2d(R)
-        assert self.R.shape == (self.ny, self.ny), "R must be (ny, ny)"
-        assert len(np.unique(self.obs_indices)) == self.ny, "obs_indices must be unique"
+        self.H = np.eye(Nx)[self.obs_indices]       # (ny, nx) selection matrix
+        R = np.asarray(R, dtype=float)
+        if R.ndim == 0:                      # number -> R * I
+            R = R * np.eye(self.Ny)
+        self.R = R
         self.Rinv = la.inv(self.R)
         self.sqR = la.cholesky(self.R)       # R = sqR @ sqR.T
 
     def Hop(self, x):
         return self.H @ x
 
-    def generate_obs(self, x0_true, ncy, Tmdl):
+    def generate_obs(self, x0_true, Tmdl):
+        ncy = self.Ncy
+        nx = x0_true.shape[0]
         x = np.copy(x0_true)
-        xt_t = np.empty((ncy, self.nx))
-        y_t = np.empty((ncy, self.ny))
+        xt_t = np.empty((ncy, nx))
+        y_t = np.empty((ncy, self.Ny))
         for it in range(ncy):
             xt_t[it] = x
-            y_t[it] = self.H @ x + self.sqR @ self.randn(self.ny)
+            y_t[it] = self.H @ x + self.sqR @ self.randn(self.Ny)
             x = Tmdl.integ(x)
-        return xt_t, y_t    
+        return xt_t, y_t
+    __call__ = generate_obs
+
+Obs = OBS( **o_kwargs)
+xt_t, y_t = Obs( xt0, Mdl )
 #+END_SRC
+
+#+RESULTS:
+:results:
+:end:
+
+** Asimilacion de datos por el filtro de Kalman
+
+Dado los datos y un modelo surrogado para producir forecasts realizamos la asimilacion de las observaciones usando el filtro de Kalman de observaciones perturbadas (Burger et al 96) y el ETKF (Hunt et al 2009).
+
 
 #+BEGIN_SRC python 
 class FILTER:
@@ -126,8 +197,8 @@ class FILTER:
         Nem=Xf.shape[1]; Ny=y.shape[0]
         Hx = self.Hop(Xf) # # Observational map Ny,Nem
         
-        xfm,Xper = meanper(Xf)        
-        hxm,Yper = meanper(Hx)
+        xfm,Xper = utils.meanper(Xf)        
+        hxm,Yper = utils.meanper(Hx)
 
         D = Yper @ Yper.T + self.R * (Nem-1)
 
@@ -137,11 +208,11 @@ class FILTER:
 
         innov = y[:, None] - Hx + self.sqR @ self.randn((Ny, Nem))   # (Ny, Nem)
         
-        if Nem > 2 * Ny:                                     # large ensemble
-            K = Xper @ M                                     # (Nx, Ny)
-            return Xf + K @ innov
-        else:                                                # small ensemble
-            return Xf + Xper @ (M @ innov)
+        #if Nem > 2 * Ny:                                     # large ensemble
+        #    K = Xper @ M                                     # (Nx, Ny)
+        #    return Xf + K @ innov
+        #else:                                                # small ensemble
+        return Xf + Xper @ (M @ innov)
 
     #- 3 -------------------------------------------------
     def etkf(self,Xf,yo):
@@ -153,13 +224,13 @@ class FILTER:
         Yf = self.Hop(Xf) # Observational map
 
         # mean and perturbations
-        xfm,Xper = meanper(Xf)        
-        hxfm,Yper =meanper(Yf)
+        xfm,Xper = utils.meanper(Xf)        
+        hxfm,Yper = utils.meanper(Yf)
 
         C = Yper.T @ Rinv
         B = (Nem-1.)*np.eye(Nem)+ C @ Yper
 
-        Pa , Wa = PaWa ( B ) # inverse and square root via EIG
+        Pa , Wa = utils.PaWa ( B ) # inverse and square root via EIG
 
         innov = yo[...,np.newaxis] - hxfm
         wa = Pa @ (C @ innov)
@@ -167,3 +238,45 @@ class FILTER:
         Xa = xfm + Xper @ (wa+Wa)
         return Xa
 #+END_SRC
+
+#+RESULTS:
+:results:
+:end:
+
+
+#+BEGIN_SRC python 
+Filter = FILTER(Mdl,Obs, **a_kwargs)
+
+# Assimilate 
+Xa_t, Xf_t = Filter(X0,y_t)
+
+ispin = 200 # saco 200 ciclos para las estadisticas
+
+rmse = utils.RMSE(xt_t[ispin:] - Xa_t[ispin:].mean(-1))
+
+print('RMSE: ',rmse)
+#+END_SRC
+
+#+RESULTS:
+:results:
+RMSE:  0.21849371832588207
+:end:
+
+
+
+
+** Resultados
+
+#+BEGIN_SRC python 
+gra.plot_hovmoller(xt_t[1000:1500,:40],0.05,filename='../tmp/hovmoller.png')
+ini=800;end=1000
+gra.assm([0,1,2],Xa_t[ini:end],y=y_t[ini:end], xt=xt_t[ini:end], indobs=Obs.obs_indices,
+         filename='../tmp/assm_L96.png')
+#+END_SRC
+
+#+RESULTS:
+:results:
+[[file:../tmp/hovmoller.png]]
+[[file:../tmp/assm_L96.png]]
+Saving to ../tmp/assm_L96.png
+:end:

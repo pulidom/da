@@ -9,7 +9,12 @@ import numpy as np
 import scipy.linalg as sla
 
 def RMSE(E):
+  ''' Definida indep de x y t, de esta manera hay mas sensibilidad a los extremos '''
   return np.sqrt(np.mean(np.square(E)))
+
+def spread(X):
+  " X[nt,nx,npa] "
+  return np.sqrt(np.mean(X.var(axis=-1, ddof=1)))
 
 def tarmse(xdif,ind=None):
   " Time averaged state RMSE "
@@ -27,30 +32,6 @@ def check_symmetric(A, rtol=1e-05, atol=1e-08):
 def mean(x,axis): # aesthetic reasons
   " Media que mantiene las dimensiones "
   return np.mean(x,axis=axis,keepdims=True)
-
-def spread(X):
-  " X[nx,npa],nt] "
-  n=X.shape
-  xm=np.mean(X,axis=1)
-  return np.mean(np.square(X-xm[:,np.newaxis]))
-
-def spreadt(X):
-  " X[nx,npa,nt] "
-  n=X.shape
-  xm=np.mean(X,axis=1)
-  var=np.mean(np.square(X-xm[:,np.newaxis]),1)
-  return np.mean(var,0)
-
-def spreadvar(X):
-  " Spread for each variable X[nx,npa],nt]  "
-  n=X.shape
-  xm=np.mean(X,axis=1)
-  var=np.mean(np.square(X-xm[:,np.newaxis]),axis=1)#/(n[1]-1.0)
-  if var.ndim == 2:
-    spread=np.sqrt(np.mean(var,axis=1)) #in time
-  else:
-    spread=np.sqrt(var)
-  return spread
 
 #------------------------------------------------
 # Covariance

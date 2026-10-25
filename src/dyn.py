@@ -19,11 +19,12 @@ http://doi.org/10.1002/qj.2879
 
 
 """
-import sys; sys.path.insert(0, '../')
+#import sys; sys.path.insert(0, '../src/')
 import os
 import numpy as np
 import numpy.random as rnd
 import matplotlib.pyplot as plt
+import gra
 #import utils
 from time import time
 #from numba import njit
@@ -142,7 +143,7 @@ class M: # parent dynamical model class
         if fname and os.path.isfile(fname):
             print('Read sample file from:', fname)
             data = np.load(fname)
-            return data['xt0'], data['X0']
+            return data['xt0'], data['X0'][:,:self.Nem]
 
         xt0, X0 = self.gen_ICs(Nt_spinup, Nt_corr, seed, 
                                x0, x0std, lens, Nt_samples)
@@ -339,27 +340,6 @@ class L96lforcing(M):
 #        dx += self._forceparam(x) * self.dt
 #        return dx
 #    
-def plot_hovmoller(x, dtcy, title="Lorenz-96"):
-    Nt, Nx = x.shape
-    time = np.arange(Nt) * dtcy
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-
-    im = ax.imshow(
-        x.T,
-        aspect="auto",
-        origin="lower",
-        extent=[time[0], time[-1], 0, Nx],
-    )
-
-    ax.set_xlabel("Time")
-    ax.set_ylabel("Variable")
-    ax.set_title(title)
-
-    fig.colorbar(im, ax=ax, label="X")
-
-    plt.tight_layout()
-    plt.savefig(f'../tmp/{title}_hovmoller.png')
 
 #----------------------------------------------------------
 if __name__ == '__main__':
@@ -389,6 +369,6 @@ if __name__ == '__main__':
     print('Tiempo:',time()-t0)
     
     #print(x_t.shape)
-    plot_hovmoller(x_t[1000:1500,:40],0.05,title='L96-2scl')#'L96forcing')
+    gra.plot_hovmoller(x_t[1000:1500,:40],0.05,title='L96-2scl')#'L96forcing')
 
     quit()
