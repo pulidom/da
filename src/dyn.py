@@ -117,26 +117,26 @@ class M: # parent dynamical model class
         self.kt = kt_orig  
 
         rng = np.random.default_rng(seed + 1)
-        nem = self.nem
+        Nem = self.Nem
 
         if lens == 1:
             print('Take initial condition from climatology')
-            idx = rng.choice(Nt_samples, nem + 1, replace=True)
-            X0 = x_t[idx[:nem]].T
-            xt0 = x_t[idx[nem]]
+            idx = rng.choice(Nt_samples, Nem + 1, replace=True)
+            X0 = x_t[idx[:Nem]].T
+            xt0 = x_t[idx[Nem]]
         elif lens == 0:
             print('Take initial ensemble randomly around true state')
             xt0 = x_t[rng.integers(Nt_samples)]
             Pf0 = np.cov(x_t.T)                    # climatological covariance
             self.sqPf0 = 0.1 * np.linalg.cholesky(Pf0)
-            X0 = xt0[:, None] + self.sqPf0 @ rng.normal(0, 1, (self.Nx, nem))
+            X0 = xt0[:, None] + self.sqPf0 @ rng.normal(0, 1, (self.Nx, Nem))
 
         return xt0, X0
     
 
     def initialization(self, Nt_spinup=7200, Nt_corr=30, seed=25, 
                        x0=0, x0std=1, lens=1, Nt_samples=1000):
-        """Initial true state xt0 (Nx,) and ensemble X0 (Nx, nem), from cache if available."""
+        """Initial true state xt0 (Nx,) and ensemble X0 (Nx, Nem), from cache if available."""
         fname = None if self.expdir is None else os.path.join(self.expdir, 'ini_cond.npz')
 
         if fname and os.path.isfile(fname):
@@ -200,7 +200,7 @@ class L96(M):
 
 
     def _mdl(self,x):
-        " L96 model equations Requires Nx as first dim x[Nx,npa/nem]"
+        " L96 model equations Requires Nx as first dim x[Nx,npa/Nem]"
         dx = (x[self.indp1] - x[self.indm2]) * x[self.indm1] - x + self.F
         return dx * self.dt
 
@@ -213,7 +213,7 @@ class L96_2scl(M):
     F=10,Nx=40, Ny = 400, c=10, b=10, h=1, # L96 two scale
     dtcy=0.05,dt=0.005,   # integration parameters
 
-    x = [ Nx,] nem ]
+    x = [ Nx,] Nem ]
     '''
     def __init__(self, F=10,Nx=40, #model parameters
                  Ny = 400, c=10, b=10, h=1, # L96 two scale
@@ -331,7 +331,7 @@ class L96lforcing(M):
         self.lin = -1.0 - a1
         
     def _mdl(self,x):
-        " L96 model equations with forcing x[Nx,npa/nem]"
+        " L96 model equations with forcing x[Nx,npa/Nem]"
         dx = (x[self.indp1] - x[self.indm2]) * x[self.indm1] + self.lin * x + self.Ft 
         return dx * self.dt
 #    def _mdl(self,x):
