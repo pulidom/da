@@ -1,10 +1,12 @@
+"""  Localized versions of the ensemble kalman filter
+"""
 import numpy as np
 # my modules
 import utils import meanper, PaWa
 
 #--------------------------------------------------------
 class LFILTER(FILTER):
-    """Localized ensemble filter: FILTER + LETKF.
+    """Localized ensemble filter: LEnKF + LETKF.
     """
     def __init__(self, Fmdl, Obs, assmtd='letkf', finf=1.0, seed=0,
                  corrl=2.0,    # localization radius in grid points

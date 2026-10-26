@@ -1,4 +1,4 @@
-* Data assimilation
+** Data assimilation
 #+OPTIONS: ^:{}
 
 This repository contains simple scripts of the following data assimilation methods:
@@ -10,9 +10,9 @@ This repository contains simple scripts of the following data assimilation metho
 
 They are mainly with illustrative and pedagogical purposes.
 
-** Main classes
+*** Main classes
 
-*** Dynamical systems
+**** Dynamical systems
 They are all in the ~src/dyn.py~ file.
 
 You will find classes for:
@@ -25,18 +25,18 @@ You will find classes for:
 - Parent class: M
   - Define integration methods: RK4 and Euler
   - Initialize the true initial condition and the ensemble members (considering a spinup time)
-*** Observation class
+**** Observation class
 
 In the file ~src/obs.py~
 
 - Define observational operator and observation covariance
 - Generate synthetic observations
 
-*** Filter class
+**** Filter class
 
 It is located at the file ~src/enkf.py~
 
-*** Variational DA classes
+**** Variational DA classes
 
 It is located at the file ~src/var.py~
 
@@ -44,21 +44,21 @@ It is located at the file ~src/var.py~
 - VAR4D
 - simple NMC method to generate background covariance in dynamical systems 
   
-** Examples
+*** Examples
 
-*** Example to run an experiment from a script
+**** Example to run an experiment from a script
 
 In folder exp
 ```python l96_simple_assm.py
 ```
 
-*** Example with notebooks
+**** Example with notebooks
 
 In the directory nb you will find orgmode and jupyter notebooks to illustrate the flow of the scripts.
 
 
 
-** Reference
+*** Reference
 
 Pulido M., G. Scheffler, J. Ruiz, M. Lucini and P. Tandeo, 2016: Estimation of the functional form of subgrid-scale schemes using ensemble-based data assimilation: a simple model experiment. Q. J.  Roy. Meteorol. Soc.,  142, 2974-2984.
 

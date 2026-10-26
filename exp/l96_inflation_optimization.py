@@ -43,7 +43,9 @@ def make_objective(seed=4, assmtd='etkf'):
         return r
     return f
 
-finf_opt, cache = robust_zoom(make_objective(), 1.0, 1.3, npts=10, nlevels=3)
+assmtd='etkf'
+print('Method: ',assmtd)
+finf_opt, cache = robust_zoom(make_objective(assmtd=assmtd), 1.0, 1.3, npts=10, nlevels=3)
 
 # look at the whole curve: the U shape should be visible
 for p in sorted(cache):
