@@ -11,6 +11,7 @@ from multiprocessing import Pool
 
 
 nworkers=16
+seed=22
 Nx = 40
 Ny = 20
 Nems = [20, 30, 50, 100, 200, 300]
