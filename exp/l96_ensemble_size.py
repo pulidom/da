@@ -10,6 +10,7 @@ from brute_force import robust_zoom
 from multiprocessing import Pool
 
 
+nworkers=16
 Nx = 40
 Ny = 20
 Nems = [20, 30, 50, 100, 200, 300]
@@ -19,8 +20,10 @@ Ncy = 2200
 dtcy = 0.05
 Rfac = 0.5
 finf_max = [1.4,1.3,1.2,1.1,1.05,1.05]
-expdir = f'../dat/l96_40v/inf_etkf_dtcy{dtcy:.2f}_R{Rfac:.1f}/'
+expdir = f'../dat/l96_40v/inf_{assmtd}_dtcy{dtcy:.2f}_R{Rfac:.1f}/'
 
+
+os.makedirs(expdir, exist_ok=True)
 
 Mdl = mdl(Nx=Nx, dtcy = dtcy, expdir=expdir, Nem=Nems[-1])
 xt0, X00 = Mdl.initialization()
@@ -61,7 +64,7 @@ if __name__ == '__main__':
     print('Method: ', assmtd)
     # largest ensembles first: they are the slowest, so this balances the load
     jobs = list(zip(Nems, finf_max))[::-1]
-    with Pool() as pool:
+    with Pool(nworkers) as pool:
         out = pool.starmap(run, jobs, chunksize=1)
     results = {Nem: (finf_opt, rmse, spread) for Nem, finf_opt, rmse, spread in out}
  
